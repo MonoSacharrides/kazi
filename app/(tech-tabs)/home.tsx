@@ -1,9 +1,8 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Animated,
   Dimensions,
-  Platform,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -12,9 +11,10 @@ import {
   View
 } from 'react-native';
 import Header from '../../components/Header';
+import { getToken } from '../../scripts/token';
 import { getUser } from '../../scripts/user';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const scaleSize = (size: number) => {
   const baseWidth = 375;
@@ -24,47 +24,141 @@ const scaleSize = (size: number) => {
 
 const Home: React.FC = () => {
   const router = useRouter();
-  const [scrollY] = useState(new Animated.Value(0));
   const user = getUser();
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [currentDate, setCurrentDate] = useState<string>('');
+
+
+  // tickets
+  const [openTickets, setOpenTickets] = useState(0);
+  const [pendingTickets, setPendingTickets] = useState(0);
+  const [completedTickets, setCompletedTickets] = useState(0);
+  const [closedTickets, setClosedTickets] = useState(0);
+
   const stats = {
-    activeTickets: 8,
-    completed: 12,
-    pending: 3,
-    closed: 4
+    activeTickets: openTickets,
+    pending: pendingTickets,
+    completed: completedTickets,
+    closed: closedTickets
   };
 
   const recentTickets = [
-    { id: 'KAZ-2021', client: 'John Doe', status: 'In Progress', priority: 'High', time: '10:30 AM' },
-    { id: 'KAZ-2022', client: 'Sarah Smith', status: 'Assigned', priority: 'Medium', time: '11:15 AM' },
-    { id: 'KAZ-2023', client: 'Mike Johnson', status: 'Completed', priority: 'Low', time: '9:00 AM' },
-    { id: 'KAZ-2024', client: 'Lisa Wang', status: 'Pending', priority: 'High', time: '2:45 PM' },
+    { id: 'KAZ-2021', client: 'John Doe', status: 'In Progress', time: '10:30 AM'},
+    { id: 'KAZ-2022', client: 'Sarah Smith', status: 'Assigned', time: '11:15 AM' },
+    { id: 'KAZ-2023', client: 'Mike Johnson', status: 'Completed', time: '9:00 AM' },
+    { id: 'KAZ-2024', client: 'Lisa Wang', status: 'Pending', time: '2:45 PM' },
   ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'In Progress': return '#F39C12';
-      case 'Assigned': return '#3498DB';
-      case 'Completed': return '#2ECC71';
-      case 'Pending': return '#95A5A6';
-      default: return '#7F8C8D';
+      case 'In Progress': return '#F59E0B';
+      case 'Assigned': return '#3B82F6';
+      case 'Completed': return '#10B981';
+      case 'Pending': return '#6B7280';
+      default: return '#6B7280';
     }
   };
 
-  const getPriorityBadge = (priority: string) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'High': return { color: '#E74C3C', bg: '#FDEDEC' };
-      case 'Medium': return { color: '#F39C12', bg: '#FEF9E7' };
-      case 'Low': return { color: '#27AE60', bg: '#EAFAF1' };
-      default: return { color: '#7F8C8D', bg: '#F4F6F6' };
+      case 'High': return '#EF4444';
+      case 'Medium': return '#F59E0B';
+      case 'Low': return '#10B981';
+      default: return '#6B7280';
     }
   };
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchTickets();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
+  const fetchTickets = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = getToken();
+      const response = await fetch('https://staging.kazibufastnet.com/api/tech/home', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorDetails = await response.text();
+        throw new Error(`Failed to fetch data. Status: ${response.status}, Details: ${errorDetails}`);
+      }
+
+      const data = await response.json();
+      const tickets = Array.isArray(data.tickets) ? data.tickets : [];
+
+      setOpenTickets(tickets.filter((t: { status: string; }) => t.status === 'open').length);
+      setPendingTickets(tickets.filter((t: { status: string; }) => t.status === 'pending').length);
+      setCompletedTickets(tickets.filter((t: { status: string; }) => t.status === 'completed').length);
+      setClosedTickets(tickets.filter((t: { status: string; }) => t.status === 'closed').length);
+
+    } catch (error: any) {
+      setError(error.message || 'Failed to fetch tickets');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTickets();
+  }, []);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning,';
+    if (hour < 17) return 'Good afternoon,';
+    return 'Good evening,';
+  };
+
+  const firstName = user?.name?.split(' ')[0] + '!' || 'Technician';
+
+  useEffect(() => {
+    const updateDateTime = () => {
+      const now = new Date();
+
+      setCurrentTime(
+        now.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+
+      setCurrentDate(
+        now.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      );
+    };
+
+    updateDateTime(); // run immediately
+
+    const interval = setInterval(updateDateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+
+  
+
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -73,84 +167,158 @@ const Home: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#00AFA1"
+            colors={["#00AFA1"]}
+          />
+        }
       >
-        <View style={styles.heroSection}>
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>
-              Hi, {user?.name?.split(' ')[0] || 'Technician'}! 👋
-            </Text>
-            <Text style={styles.welcome}>
-              Welcome Technician
-            </Text>
 
+        <View style={styles.welcomeSection}>
+          <View style={styles.welcomeLeft}>
+            <Text
+              style={styles.greeting}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+            >
+              {getGreeting()}
+            </Text>
           </View>
+
+          <View style={styles.welcomeLeft}>
+            <Text
+              style={styles.name}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+            >
+            {firstName}
+            </Text>
+          </View>
+
+
+          <View style={styles.welcomeLeft}>
+            <Text
+              style={styles.currentTime}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+            >
+              {currentTime}
+            </Text>
+          </View>
+          <View style={styles.welcomeLeft}>
+            <Text
+              style={styles.currentDate}
+              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+            >
+               {currentDate}
+            </Text>
+          </View>
+
+        
+         
         </View>
 
+
+
+        {/* Stats Section */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Today's Overview</Text>
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.activeTickets}</Text>
-              <Text style={styles.statLabel}>Open Tickets</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.pending}</Text>
-              <Text style={styles.statLabel}>Pending Tickets</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.completed}</Text>
-              <Text style={styles.statLabel}>Completed Tickets</Text>
+            <View style={[styles.statCard, styles.openCard]}>
+              <View style={styles.statHeader}>
+
+                <Text style={styles.statNumber}>{stats.activeTickets}</Text>
+              </View>
+              <Text style={styles.statLabel}>Open</Text>
+              <Text style={styles.statSubText}>Need attention</Text>
             </View>
 
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{stats.closed}</Text>
-              <Text style={styles.statLabel}>Closed Tickets</Text>
+            <View style={[styles.statCard, styles.pendingCard]}>
+              <View style={styles.statHeader}>
+
+                <Text style={styles.statNumber}>{stats.pending}</Text>
+              </View>
+              <Text style={styles.statLabel}>Pending</Text>
+              <Text style={styles.statSubText}>Awaiting action</Text>
+            </View>
+
+            <View style={[styles.statCard, styles.completedCard]}>
+              <View style={styles.statHeader}>
+
+                <Text style={styles.statNumber}>{stats.completed}</Text>
+              </View>
+              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statSubText}>Today's success</Text>
+            </View>
+
+            <View style={[styles.statCard, styles.closedCard]}>
+              <View style={styles.statHeader}>
+
+                <Text style={styles.statNumber}>{stats.closed}</Text>
+              </View>
+              <Text style={styles.statLabel}>Closed</Text>
+              <Text style={styles.statSubText}>Resolved tickets</Text>
             </View>
           </View>
         </View>
 
-
+        {/* Recent Tickets */}
         <View style={styles.ticketsSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recently Open</Text>
-            <TouchableOpacity onPress={() => router.push('/tickets')}>
-              <Text style={styles.viewAll}>See All →</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Recent Tickets</Text>
+              <Text style={styles.sectionSubtitle}>Last updated tickets</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={() => router.push('/tickets')}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
+
           <View style={styles.ticketsList}>
             {recentTickets.map((ticket, index) => {
-              const priorityStyle = getPriorityBadge(ticket.priority);
+              const statusColor = getStatusColor(ticket.status);
               return (
                 <TouchableOpacity
                   key={index}
                   style={styles.ticketCard}
                   onPress={() => router.push(`/tickets/${ticket.id}`)}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.ticketHeader}>
-                    <Text style={styles.ticketId}>{ticket.client}</Text>
+                    <View style={styles.ticketIdContainer}>
+                      <Text style={styles.ticketId}>{ticket.id}</Text>
+                    
+                    </View>
                     <Text style={styles.ticketTime}>{ticket.time}</Text>
                   </View>
-                 
+
+                  <Text style={styles.ticketClient}>{ticket.client}</Text>
+
                   <View style={styles.ticketFooter}>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(ticket.status) + '20' }]}>
-                      <View style={[styles.statusDot, { backgroundColor: getStatusColor(ticket.status) }]} />
-                      <Text style={[styles.statusText, { color: getStatusColor(ticket.status) }]}>
-                        {ticket.status}
-                      </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      <Text style={[styles.statusText, { color: statusColor }]}>{ticket.status}</Text>
                     </View>
-                   
+                    <View style={styles.actionButton}>
+                      <Text style={styles.actionText}>View Details →</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
             })}
           </View>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  // Safe Area & Scroll
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -159,61 +327,100 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    paddingBottom: scaleSize(30),
   },
-  heroSection: {
-    paddingHorizontal: scaleSize(20),
-    paddingTop: scaleSize(20),
-    paddingBottom: scaleSize(25),
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    elevation: 5,
-    marginBottom: scaleSize(20),
-  },
-  greetingContainer: {
-    justifyContent: 'center'
-  },
-  greeting: {
-    fontSize: scaleSize(32),
-    fontWeight: '800',
-    color: '#1A202C',
-    marginBottom: scaleSize(6),
-  },
-  welcome: {
-    fontSize: scaleSize(18),
-    color: '#4A5568',
-    fontWeight: '600',
-    marginBottom: scaleSize(8),
-  },
-  userInfo: {
+
+  // Welcome Section
+  welcomeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: scaleSize(10),
+    backgroundColor: '#FFFFFF',
+    borderRadius: scaleSize(20),
+    padding: scaleSize(24),
+    marginHorizontal: scaleSize(16),
+    marginTop: scaleSize(16),
+    marginBottom: scaleSize(20),
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
-  userRole: {
+  welcomeTextContainer: {
+    flex: 1,
+  },
+
+  welcomeSection: {
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    paddingHorizontal: scaleSize(18),
+    paddingVertical: scaleSize(16),
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: scaleSize(24),
+    borderBottomRightRadius: scaleSize(24),
+    marginBottom: scaleSize(12),
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+
+  welcomeLeft: {
+    flex: 1,
+    marginRight: scaleSize(10),
+  },
+
+  greeting: {
+    fontSize: scaleSize(15),
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+  name: {
+    fontSize: scaleSize(20),
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+  currentTime: {
+    fontSize: scaleSize(15),
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+  currentDate: {
+    fontSize: scaleSize(9),
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+
+  role: {
     fontSize: scaleSize(14),
     color: '#718096',
-    backgroundColor: '#EDF2F7',
-    paddingHorizontal: scaleSize(12),
-    paddingVertical: scaleSize(6),
-    borderRadius: 20,
-    fontWeight: '500',
+    marginTop: scaleSize(2),
   },
-  userId: {
-    fontSize: scaleSize(13),
-    color: '#A0AEC0',
-    fontWeight: '500',
+
+  time: {
+    fontSize: scaleSize(21),
+    fontWeight: '800',
+    color: '#00AFA1',
+    lineHeight: scaleSize(30),
   },
+
+  date: {
+    fontSize: scaleSize(12),
+    color: '#718096',
+    marginTop: scaleSize(2),
+  },
+
+  // Stats Section
   statsSection: {
-    paddingHorizontal: scaleSize(20),
-    marginBottom: scaleSize(25),
+    paddingHorizontal: scaleSize(16),
+    marginBottom: scaleSize(24),
   },
   sectionTitle: {
     fontSize: scaleSize(20),
     fontWeight: '700',
-    color: '#2D3748',
+    color: '#1F2937',
     marginBottom: scaleSize(16),
   },
   statsGrid: {
@@ -223,36 +430,62 @@ const styles = StyleSheet.create({
     gap: scaleSize(12),
   },
   statCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: scaleSize(16),
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: scaleSize(16),
+    padding: scaleSize(20),
     width: '48%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: scaleSize(12),
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+  },
+  openCard: {
+    borderTopWidth: scaleSize(4),
+    borderTopColor: '#007bff',
+  },
+  pendingCard: {
+    borderTopWidth: scaleSize(4),
+    borderTopColor: '#F59E0B',
+  },
+  completedCard: {
+    borderTopWidth: scaleSize(4),
+    borderTopColor: '#10B981',
+  },
+  closedCard: {
+    borderTopWidth: scaleSize(4),
+    borderTopColor: '#6B7280',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: scaleSize(12),
   },
-  statIcon: {
-    fontSize: scaleSize(24),
-    marginBottom: scaleSize(8),
-  },
   statNumber: {
-    fontSize: scaleSize(28),
+    fontSize: scaleSize(32),
     fontWeight: '800',
-    color: '#00A8FF',
-    marginBottom: scaleSize(4),
+    color: '#1F2937',
   },
   statLabel: {
+    fontSize: scaleSize(16),
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: scaleSize(4),
+  },
+  statSubText: {
     fontSize: scaleSize(12),
-    color: '#718096',
+    color: '#6B7280',
     fontWeight: '500',
   },
-  actionsSection: {
-    paddingHorizontal: scaleSize(20),
-    marginBottom: scaleSize(25),
+
+  // Tickets Section
+  ticketsSection: {
+    paddingHorizontal: scaleSize(16),
+    marginBottom: scaleSize(24),
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -260,89 +493,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: scaleSize(16),
   },
-  viewAll: {
+  sectionSubtitle: {
     fontSize: scaleSize(14),
-    color: '#00A8FF',
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: scaleSize(4),
+  },
+  viewAllButton: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: scaleSize(16),
+    paddingVertical: scaleSize(10),
+    borderRadius: scaleSize(12),
+    borderWidth: scaleSize(1),
+    borderColor: '#E5E7EB',
+  },
+  viewAllText: {
+    fontSize: scaleSize(14),
     fontWeight: '600',
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: scaleSize(12),
-  },
-  actionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: scaleSize(16),
-    width: '48%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: scaleSize(12),
-  },
-  actionIcon: {
-    width: scaleSize(48),
-    height: scaleSize(48),
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: scaleSize(12),
-  },
-  actionIconText: {
-    fontSize: scaleSize(24),
-  },
-  actionTitle: {
-    fontSize: scaleSize(16),
-    fontWeight: '700',
-    color: '#2D3748',
-    marginBottom: scaleSize(4),
-  },
-  actionDescription: {
-    fontSize: scaleSize(12),
-    color: '#718096',
-    lineHeight: scaleSize(16),
-  },
-  ticketsSection: {
-    paddingHorizontal: scaleSize(20),
-    marginBottom: scaleSize(25),
+    color: '#374151',
   },
   ticketsList: {
     gap: scaleSize(12),
   },
   ticketCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: scaleSize(16),
+    backgroundColor: '#FFFFFF',
+    borderRadius: scaleSize(16),
+    padding: scaleSize(20),
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
   },
   ticketHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: scaleSize(12),
+  },
+  ticketIdContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: scaleSize(8),
+    gap: scaleSize(8),
   },
   ticketId: {
     fontSize: scaleSize(16),
     fontWeight: '700',
-    color: '#00A8FF',
+    color: '#3B82F6',
+  },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scaleSize(10),
+    paddingVertical: scaleSize(4),
+    borderRadius: scaleSize(12),
+    gap: scaleSize(4),
+  },
+  priorityDot: {
+    width: scaleSize(6),
+    height: scaleSize(6),
+    borderRadius: scaleSize(3),
+  },
+  priorityText: {
+    fontSize: scaleSize(11),
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   ticketTime: {
-    fontSize: scaleSize(12),
-    color: '#A0AEC0',
+    fontSize: scaleSize(13),
+    color: '#6B7280',
     fontWeight: '500',
   },
   ticketClient: {
-    fontSize: scaleSize(15),
-    color: '#4A5568',
+    fontSize: scaleSize(18),
     fontWeight: '600',
-    marginBottom: scaleSize(12),
+    color: '#1F2937',
+    marginBottom: scaleSize(16),
   },
   ticketFooter: {
     flexDirection: 'row',
@@ -352,54 +579,33 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: scaleSize(10),
-    paddingVertical: scaleSize(4),
-    borderRadius: 12,
+    paddingHorizontal: scaleSize(12),
+    paddingVertical: scaleSize(6),
+    borderRadius: scaleSize(12),
+    gap: scaleSize(6),
   },
   statusDot: {
-    width: scaleSize(6),
-    height: scaleSize(6),
-    borderRadius: 3,
-    marginRight: scaleSize(6),
+    width: scaleSize(8),
+    height: scaleSize(8),
+    borderRadius: scaleSize(4),
   },
   statusText: {
     fontSize: scaleSize(12),
-    fontWeight: '600',
-  },
-  priorityBadge: {
-    paddingHorizontal: scaleSize(10),
-    paddingVertical: scaleSize(4),
-    borderRadius: 12,
-  },
-  priorityText: {
-    fontSize: scaleSize(11),
     fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
-  performanceBanner: {
-    marginHorizontal: scaleSize(20),
-    marginBottom: scaleSize(25),
-    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    borderRadius: 20,
-    padding: scaleSize(20),
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+  actionButton: {
+    paddingVertical: scaleSize(8),
+    paddingHorizontal: scaleSize(12),
   },
-  bannerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  actionText: {
+    fontSize: scaleSize(14),
+    fontWeight: '600',
+    color: '#00AFA1',
   },
-  bannerTitle: {
-    fontSize: scaleSize(18),
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: scaleSize(6),
-  },
- 
+
 });
+
 
 export default Home;

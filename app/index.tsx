@@ -11,7 +11,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from "react-native";
 
 export default function LoginScreen() {
@@ -28,34 +28,44 @@ export default function LoginScreen() {
     const [otpLoading, setOtpLoading] = useState(false);
 
     useEffect(() => {
-       let timer: ReturnType<typeof setTimeout>;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+
         if (showOtpScreen && resendTimer > 0) {
             timer = setTimeout(() => {
-                setResendTimer(resendTimer - 1);
+                setResendTimer((prev) => prev - 1);
             }, 1000);
-        } else if (resendTimer === 0) {
+        }
+
+        if (showOtpScreen && resendTimer === 0 && !canResend) {
             setCanResend(true);
         }
-        return () => clearTimeout(timer);
-    }, [showOtpScreen, resendTimer]);
+
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+    }, [showOtpScreen, resendTimer, canResend]);
+
 
     const formatPhoneDisplay = (number: string) => {
-        const cleaned = number.replace(/\D/g, '');
+        const cleaned = number.replace(/\D/g, "");
         if (cleaned.length <= 3) {
             return cleaned;
         } else if (cleaned.length <= 6) {
             return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
         } else {
-            return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 10)}`;
+            return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(
+                6,
+                10
+            )}`;
         }
     };
 
     const encryptPhoneNumber = (number: string) => {
-        const cleaned = number.replace(/\D/g, '');
+        const cleaned = number.replace(/\D/g, "");
 
         if (cleaned.length === 10) {
-            const firstThree = cleaned.slice(0, 3); 
-            const lastThree = cleaned.slice(7, 10); 
+            const firstThree = cleaned.slice(0, 3);
+            const lastThree = cleaned.slice(7, 10);
             return `+63 ${firstThree.slice(0, 1)}** *** ${lastThree}`;
         }
 
@@ -63,20 +73,19 @@ export default function LoginScreen() {
     };
 
     const handleSendOtp = async () => {
-        
         if (!phoneNumber.trim()) {
             Alert.alert("Error", "Please enter your phone number");
             return;
         }
 
-        const cleanPhone = phoneNumber.replace(/\D/g, '');
+        const cleanPhone = phoneNumber.replace(/\D/g, "");
 
         if (cleanPhone.length !== 10) {
             Alert.alert("Error", "Please enter a valid 10-digit phone number");
             return;
         }
 
-        if (!cleanPhone.startsWith('9')) {
+        if (!cleanPhone.startsWith("9")) {
             Alert.alert("Error", "Phone number must start with 9");
             return;
         }
@@ -91,43 +100,75 @@ export default function LoginScreen() {
                 `Verification code has been sent to ${encryptedPhone}`,
                 [{ text: "OK" }]
             );
+
             setShowOtpScreen(true);
             setResendTimer(30);
             setCanResend(false);
             setOtp(["", "", "", "", "", ""]);
         }, 1500);
 
+        // staging api call for sending otp
+        const response = await fetch(
+            "https://staging.kazibufastnet.com/api/verify_number",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    mobile_number: "+63" + cleanPhone,
+                }),
+            }
+        );
+    };
 
-        const response = await fetch('https://kazibufastnet.com/api/sms', {
-            method: 'POST',
-            headers: {
-            'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-            mobile_number: "+63" + cleanPhone
-            }),
-        })
-    }
-
-
+    // Otp handlers
     const handleVerifyOtp = async () => {
-        const otpString = otp.join('');
+        const otpString = otp.join("");
 
-    
-
-        setOtpLoading(true);
-
-       setTimeout(() => {
-        setOtpLoading(false);
-
-      
-        if (otpString === '123456') { 
-            Alert.alert("Success", "Phone number verified successfully!");
-         
-        } else {
-            Alert.alert("Error", "Invalid OTP. Please try again.");
+        if (otpString.length !== 6) {
+            Alert.alert("Error", "Please enter the complete 6-digit OTP");
+            return;
         }
-    }, 1000);
+
+        try {
+            setOtpLoading(true);
+
+            const response = await fetch(
+                "https://staging.kazibufastnet.com/api/otp",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Accept: "application/json",
+                    },
+                    body: JSON.stringify({
+                        mobile_number: "+63" + phoneNumber.replace(/\D/g, ""),
+                        otp: otpString,
+                    }),
+                }
+            );
+
+            const text = await response.text();
+            const data = text ? JSON.parse(text) : {};
+
+            if (!response.ok) {
+                throw new Error(data?.message || "Invalid OTP");
+            }
+
+            Alert.alert("Success", "Phone number verified successfully!");
+            router.push({
+                pathname: "/setup-pin",
+                params: {
+                    phone: "+63" + phoneNumber,
+                    verified: "true",
+                },
+            });
+        } catch (error: any) {
+            Alert.alert("Error", error.message || "Something went wrong");
+        } finally {
+            setOtpLoading(false);
+        }
     };
 
     const handleResendOtp = () => {
@@ -138,13 +179,14 @@ export default function LoginScreen() {
 
         setOtp(["", "", "", "", "", ""]);
 
-        Alert.alert("OTP Resent", "A new verification code has been sent to your phone.");
-
+        Alert.alert(
+            "OTP Resent",
+            "A new verification code has been sent to your phone."
+        );
     };
 
     const handleOtpChange = (index: number, value: string) => {
-
-        const numericValue = value.replace(/\D/g, '');
+        const numericValue = value.replace(/\D/g, "");
 
         if (numericValue) {
             const newOtp = [...otp];
@@ -156,22 +198,15 @@ export default function LoginScreen() {
                     otpRefs.current[index + 1]?.focus();
                 }, 10);
             }
-
-            if (index === 5 && newOtp.every(digit => digit !== "")) {
-
-                setTimeout(() => {
-                    handleVerifyOtp();
-                }, 500);
-            }
         } else {
             const newOtp = [...otp];
-            newOtp[index] = '';
+            newOtp[index] = "";
             setOtp(newOtp);
         }
     };
 
     const handleOtpKeyPress = (index: number, e: any) => {
-        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
+        if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
             otpRefs.current[index - 1]?.focus();
         }
     };
@@ -182,7 +217,6 @@ export default function LoginScreen() {
     };
 
     const handleSignIn = () => {
-
         router.push("/mpin-login");
     };
 
@@ -210,21 +244,31 @@ export default function LoginScreen() {
                                 style={styles.logo}
                                 resizeMode="contain"
                             />
-                            <View style={{ flexDirection: 'row' }}>
-                                <View><Text style={{
-                                    fontSize: 24,
-                                    fontWeight: "900",
-                                    color: "#00afa1ff",
-                                    marginRight: 2,
-
-                                }}>KAZIBU</Text></View>
-                                <View><Text style={{
-                                    fontSize: 24,
-                                    fontWeight: "900",
-                                    color: "#00afa1ff",
-                                }}>FAST</Text></View>
+                            <View style={{ flexDirection: "row" }}>
+                                <View>
+                                    <Text
+                                        style={{
+                                            fontSize: 24,
+                                            fontWeight: "900",
+                                            color: "#00afa1ff",
+                                            marginRight: 2,
+                                        }}
+                                    >
+                                        KAZIBU
+                                    </Text>
+                                </View>
+                                <View>
+                                    <Text
+                                        style={{
+                                            fontSize: 24,
+                                            fontWeight: "900",
+                                            color: "#000000ff",
+                                        }}
+                                    >
+                                        FAST
+                                    </Text>
+                                </View>
                             </View>
-
                         </View>
 
                         <Text style={styles.title}>Verify Phone Number</Text>
@@ -235,7 +279,6 @@ export default function LoginScreen() {
                             </Text>
                         </Text>
 
-
                         <View style={styles.otpContainer}>
                             {[0, 1, 2, 3, 4, 5].map((index) => (
                                 <TextInput
@@ -243,10 +286,7 @@ export default function LoginScreen() {
                                     ref={(ref) => {
                                         otpRefs.current[index] = ref;
                                     }}
-                                    style={[
-                                        styles.otpInput,
-                                        otp[index] && styles.otpInputFilled
-                                    ]}
+                                    style={[styles.otpInput, otp[index] && styles.otpInputFilled]}
                                     value={otp[index]}
                                     onChangeText={(value) => handleOtpChange(index, value)}
                                     onKeyPress={(e) => handleOtpKeyPress(index, e)}
@@ -260,20 +300,15 @@ export default function LoginScreen() {
                             ))}
                         </View>
 
-
-
                         <View style={styles.resendContainer}>
-                            <Text style={styles.resendText}>
-                                Didn't receive the code?{" "}
-                            </Text>
-                            <TouchableOpacity
-                                onPress={handleResendOtp}
-                                disabled={!canResend}
-                            >
-                                <Text style={[
-                                    styles.resendLink,
-                                    !canResend && styles.resendLinkDisabled
-                                ]}>
+                            <Text style={styles.resendText}>Didn't receive the code? </Text>
+                            <TouchableOpacity onPress={handleResendOtp} disabled={!canResend}>
+                                <Text
+                                    style={[
+                                        styles.resendLink,
+                                        !canResend && styles.resendLinkDisabled,
+                                    ]}
+                                >
                                     {canResend ? "Resend OTP" : `Resend in ${resendTimer}s`}
                                 </Text>
                             </TouchableOpacity>
@@ -283,7 +318,6 @@ export default function LoginScreen() {
                             style={[styles.button, otpLoading && styles.buttonDisabled]}
                             onPress={handleVerifyOtp}
                             disabled={otpLoading}
-                       
                         >
                             {otpLoading ? (
                                 <ActivityIndicator color="#fff" />
@@ -307,37 +341,44 @@ export default function LoginScreen() {
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.container}>
-
                     <View style={styles.logoContainer}>
                         <Image
                             source={require("../assets/images/kazi.png")}
                             style={styles.logo}
                             resizeMode="contain"
                         />
-                        <View style={{ flexDirection: 'row' }}>
-                            <View><Text style={{
-                                fontSize: 24,
-                                fontWeight: "900",
-                                color: "#00afa1ff",
-                                marginRight: 2,
-
-                            }}>KAZIBU</Text></View>
-                            <View><Text style={{
-                                fontSize: 24,
-                                fontWeight: "900",
-                                color: "#00afa1ff",
-                            }}>FAST</Text></View>
+                        <View style={{ flexDirection: "row" }}>
+                            <View>
+                                <Text
+                                    style={{
+                                        fontSize: 24,
+                                        fontWeight: "900",
+                                        color: "#00afa1ff",
+                                        marginRight: 2,
+                                    }}
+                                >
+                                    KAZIBU
+                                </Text>
+                            </View>
+                            <View>
+                                <Text
+                                    style={{
+                                        fontSize: 24,
+                                        fontWeight: "900",
+                                        color: "#00afa1ff",
+                                    }}
+                                >
+                                    FAST
+                                </Text>
+                            </View>
                         </View>
-
                     </View>
 
                     <View style={styles.formContainer}>
-
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Verify Phone Number</Text>
 
                             <View style={styles.phoneInputContainer}>
-
                                 <View style={styles.countryCodeBox}>
                                     <Text style={styles.countryCodeText}>+63</Text>
                                 </View>
@@ -350,13 +391,13 @@ export default function LoginScreen() {
                                     placeholderTextColor="#999"
                                     value={formatPhoneDisplay(phoneNumber)}
                                     onChangeText={(text) => {
-                                        const cleaned = text.replace(/\D/g, '').slice(0, 10);
+                                        const cleaned = text.replace(/\D/g, "").slice(0, 10);
                                         setPhoneNumber(cleaned);
                                     }}
                                     keyboardType="phone-pad"
                                     autoComplete="tel"
                                     editable={!loading}
-                                    maxLength={13}
+                                    maxLength={12}
                                     onSubmitEditing={handleSendOtp}
                                     returnKeyType="send"
                                 />
@@ -371,10 +412,11 @@ export default function LoginScreen() {
                             style={[
                                 styles.button,
                                 loading && styles.buttonDisabled,
-                                phoneNumber.replace(/\D/g, '').length !== 10 && styles.buttonDisabled
+                                phoneNumber.replace(/\D/g, "").length !== 10 &&
+                                styles.buttonDisabled,
                             ]}
                             onPress={handleSendOtp}
-                            disabled={loading || phoneNumber.replace(/\D/g, '').length !== 10}
+                            disabled={loading || phoneNumber.replace(/\D/g, "").length !== 10}
                         >
                             {loading ? (
                                 <ActivityIndicator color="#fff" />
@@ -395,7 +437,6 @@ export default function LoginScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -412,10 +453,10 @@ const styles = StyleSheet.create({
         alignItems: "center",
         padding: 20,
         backgroundColor: "#0C1824",
-        minHeight: '100%',
+        minHeight: "100%",
     },
     backButton: {
-        alignSelf: 'flex-start',
+        alignSelf: "flex-start",
         padding: 8,
         bottom: 120,
     },
@@ -426,7 +467,7 @@ const styles = StyleSheet.create({
     },
     logoContainer: {
         alignItems: "center",
-        marginBottom: 60,
+        marginBottom: 35,
     },
     logo: {
         width: 120,
@@ -461,7 +502,7 @@ const styles = StyleSheet.create({
         maxWidth: 400,
     },
     inputContainer: {
-        marginBottom: 30,
+        marginBottom: 15,
     },
     label: {
         fontSize: 14,
@@ -601,7 +642,6 @@ const styles = StyleSheet.create({
         color: "#00afa1ff",
         fontSize: 14,
         fontWeight: "600",
-        textDecorationLine: 'underline',
+        textDecorationLine: "underline",
     },
 });
-

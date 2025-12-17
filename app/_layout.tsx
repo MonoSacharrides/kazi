@@ -10,11 +10,13 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="setup-pin" options={{ headerShown: false }} />
         <Stack.Screen name="mpin-login" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
         <Stack.Screen name="tabs-redirect" options={{ headerShown: false }} />
 
         <Stack.Screen name="(tech-tabs)" options={{ headerShown: false }} />
-
+        <Stack.Screen name="tickets/[id]" options={{ headerShown: false }} />
+        
         <Stack.Screen name="ProfileSettings/AccountSettings" options={{ headerShown: false }} />
         <Stack.Screen name="ProfileSettings/PrivacySecurity" options={{ headerShown: false }} />
         <Stack.Screen name="ProfileSettings/HelpSupport" options={{ headerShown: false }} />

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Alert,
     Dimensions,
@@ -16,6 +17,7 @@ import {
 import { setToken } from '../scripts/token';
 import { setUser } from '../scripts/user';
 
+
 const { width, height } = Dimensions.get("window");
 
 const scaleSize = (size: number) => {
@@ -30,13 +32,26 @@ export default function MpinLoginScreen() {
     const [message, setMessage] = useState("");
 
     const [mpin, setMpin] = useState(["", "", "", "", "", ""]);
-    const [phoneNumber] = useState(params.phoneNumber as string || "11220011");
+    const [phoneNumber, setPhoneNumber] = useState<string>("");
     const [isLoading, setIsLoading] = useState(false);
     const [currentPosition, setCurrentPosition] = useState(0);
     const [isVerifying, setIsVerifying] = useState(false);
     const [shakeAnimation, setShakeAnimation] = useState(false);
 
     const hasEnteredNumber = mpin.some(digit => digit !== "");
+
+    
+    useEffect(() => {
+  const loadPhoneNumber = async () => {
+    if (params.phone) {
+      setPhoneNumber(params.phone as string);
+    } else {
+      const storedNumber = await AsyncStorage.getItem("phone_number");
+      if (storedNumber) setPhoneNumber(storedNumber);
+    }
+  };
+  loadPhoneNumber();
+}, []);
 
     const loginRequest = async (mobile_number: string, mpin: string) => {
         const url = "https://staging.kazibufastnet.com/api/login";
@@ -50,7 +65,7 @@ export default function MpinLoginScreen() {
                 },
                 body: JSON.stringify({
                     mobile_number: mobile_number,
-                    password: mpin,
+                    pin: mpin,
                 }),
             });
             const data = await response.json();

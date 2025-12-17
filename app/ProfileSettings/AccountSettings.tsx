@@ -3,9 +3,11 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
+import { getUser } from '../../scripts/user';
 
 const AccountSettings: React.FC = () => {
   const router = useRouter();
+  const user = getUser();
   const [userData, setUserData] = useState({
     fullName: 'Mono User',
     email: 'mono@kazibufast.com',
@@ -16,7 +18,6 @@ const AccountSettings: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
 
   const handleSave = () => {
-    // Here you would normally save to API
     Alert.alert('Success', 'Account settings updated successfully!');
     setIsEditing(false);
   };
