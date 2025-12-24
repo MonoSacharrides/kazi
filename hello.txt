@@ -1,400 +1,97 @@
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import {
-    Alert,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import { getToken } from '../scripts/token';
-import RejectedButton from './Modal/RejectedButton';
-import RescheduleButton from './Modal/RescheduleButton';
-import TicketButton from './TicketButton';
+import React, { useState, useRef } from 'react';
+import { Alert, Text, TouchableOpacity, View, Image, SafeAreaView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Camera } from 'expo-camera';  // Assuming you're using expo-camera
 
-type TicketStatus = 'pending' | 'accepted' | 'in_progress';
+export default function TimeInScreen() {
+    const [showCamera, setShowCamera] = useState<boolean>(false);  // State to show or hide the camera
+    const [picture, setPicture] = useState<string | null>(null);    // State to store the captured picture
+    const cameraRef = useRef<any>(null);  // Create a ref for the camera
 
-interface TicketItem {
-    id: string;
-    ticketNumber: string;
-    accountNumber: string;
-    accountName: string;
-    installationAddress: string;
-    mobileNumber: string;
-    status: TicketStatus;
-    type: string;
-    date: string;
-    subject: string;
-}
-
-const TicketActionButtons: React.FC = () => {
-    const { id } = useLocalSearchParams<{ id: string }>();
-
-    const [status, setStatus] = useState<TicketStatus>('pending');
-    const [ticket, setTicket] = useState<TicketItem | null>(null);
-
-    const [remarks, setRemarks] = useState('');
-    const [location, setLocation] = useState('');
-    const [pictureCause, setPictureCause] = useState<string | null>(null);
-    const [picturePending, setPicturePending] = useState<string | null>(null);
-
-    /* ---------------- FETCH TICKET ---------------- */
-    const fetchTicket = async () => {
-        try {
-            const token = await getToken();
-
-            const res = await fetch(
-                `https://staging.kazibufastnet.com/api/tech/tickets/view/${id}`,
+    const handleTakePicture = (): void => {
+        Alert.alert(
+            'Take Picture',
+            'This feature will open the camera to take a photo for verification.',
+            [
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/json',
-                    },
-                }
-            );
-
-            if (!res.ok) throw new Error('Failed to fetch ticket');
-
-            const { ticket: t } = await res.json();
-
-            const normalizedStatus: TicketStatus =
-                t.status === 'accepted'
-                    ? 'accepted'
-                    : t.status === 'in_progress'
-                        ? 'in_progress'
-                        : 'pending';
-
-            setTicket({
-                id: String(t.id),
-                ticketNumber: t.ticket_number ?? 'N/A',
-                accountNumber: t.subscription_id ?? 'N/A',
-                accountName: t.client?.name ?? 'Unknown',
-                installationAddress: t.subscription?.installation_address ?? 'N/A',
-                mobileNumber: t.client?.mobile_number ?? 'N/A',
-                status: normalizedStatus,
-                type: t.type,
-                date: t.created_at,
-                subject: t.subject,
-            });
-
-            setStatus(normalizedStatus);
-
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    useEffect(() => {
-        if (!id) return;
-        fetchTicket();
-    }, [id]);
-
-
-    /* ---------------- ACTIONS ---------------- */
-    const handleAccept = async () => {
-        try {
-            const token = await getToken();
-
-            await fetch(
-                `https://staging.kazibufastnet.com/api/tech/tickets/accepted/${id}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/json',
-                    },
-                }
-            );
-
-            setStatus('accepted');
-            Alert.alert('Success', 'Ticket accepted');
-        } catch (err) {
-            Alert.alert('Error', 'Failed to accept ticket');
-        }
-    };
-
-    const handleInProgress = async () => {
-        try {
-            const token = await getToken();
-
-            await fetch(
-                `https://staging.kazibufastnet.com/api/tech/tickets/in_progress/${id}`,
-                {
-                    method: 'GET',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/json',
-                    },
-                }
-            );
-
-            setStatus('in_progress');
-            Alert.alert('Started', 'Work started');
-        } catch (err) {
-            Alert.alert('Error', 'Failed to start work');
-        }
-    };
-
-    /* ---------------- LOCATION ---------------- */
-    const getCurrentLocation = async () => {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Permission denied');
-            return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation(
-            `${loc.coords.latitude.toFixed(6)}, ${loc.coords.longitude.toFixed(6)}`
+                    text: 'Open Camera',
+                    onPress: () => setShowCamera(true),
+                },
+            ]
         );
     };
 
-    /* ---------------- IMAGES ---------------- */
-    const pickImage = async (setter: (v: string | null) => void) => {
-        if (Platform.OS !== 'web') {
-            const { status } =
-                await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') return;
+    // Capture the picture using the camera ref
+    const handleCapture = async () => {
+        if (cameraRef.current) {
+            const options = {
+                quality: 1,  // High quality
+                base64: true,  // Get base64 string of the photo
+                exif: false,  // Don't include EXIF data
+            };
+
+            // Capture photo and store in the state
+            const photo = await cameraRef.current.takePictureAsync(options);
+            setPicture(photo.base64);  // Set the captured photo's base64 string to the state
+            setShowCamera(false);  // Close camera after taking the picture
         }
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-        });
-
-        if (!result.canceled) setter(result.assets[0].uri);
     };
 
-    /* ---------------- COMPLETE ---------------- */
-    const handleSubmitCompletion = () => {
-        if (!remarks.trim()) {
-            Alert.alert('Remarks required');
-            return;
+    // Display the captured picture
+    const renderPicture = () => {
+        if (picture) {
+            return (
+                <View style={{ marginTop: 20 }}>
+                    <Text>Picture Captured!</Text>
+                    <Image
+                        style={{ width: 200, height: 200, borderRadius: 15 }}
+                        source={{ uri: `data:image/jpg;base64,${picture}` }}  // Display the captured picture
+                    />
+                </View>
+            );
         }
-
-        console.log({
-            id,
-            remarks,
-            location,
-            pictureCause,
-            picturePending,
-        });
-
-        Alert.alert('Completed', 'Ticket completed successfully');
+        return null;
     };
 
-    /* ---------------- UI ---------------- */
     return (
-        <View style={styles.actionButtonsContainer}>
-            {status === 'pending' && (
-                <View style={styles.buttonRow}>
-                    <RejectedButton style={styles.flexButton} onReject={() => { }} />
-                    <TicketButton
-                        label="Accept Ticket"
-                        style={styles.flexButton}
-                        onPress={handleAccept}
-                    />
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity
+                style={{ padding: 20, backgroundColor: '#00AFA1', borderRadius: 8 }}
+                onPress={handleTakePicture}
+            >
+                <Ionicons name="camera-outline" size={24} color="#fff" />
+                <Text style={{ color: '#fff' }}>Take Picture</Text>
+            </TouchableOpacity>
+
+            {/* Camera view */}
+            {showCamera && (
+                <View style={{ flex: 1, width: '100%', height: '100%' }}>
+                    <Camera
+                        style={{ flex: 1 }}
+                        type={Camera.Constants.Type.back}  // Use the back camera
+                        ref={cameraRef}  // Attach ref to the camera
+                    >
+                        <TouchableOpacity
+                            style={{
+                                position: 'absolute',
+                                bottom: 30,
+                                left: '50%',
+                                transform: [{ translateX: -50% }],
+                                padding: 20,
+                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                borderRadius: 50,
+                            }}
+                            onPress={handleCapture}
+                        >
+                            <Ionicons name="camera" size={40} color="#fff" />
+                        </TouchableOpacity>
+                    </Camera>
                 </View>
             )}
 
-            {status === 'accepted' && (
-                <View style={styles.buttonRow}>
-                    <RescheduleButton style={styles.flexButton} onConfirm={() => { }} />
-                    <TicketButton
-                        label="Start Work"
-                        style={styles.flexButton}
-                        onPress={handleInProgress}
-                    />
-                </View>
-            )}
-
-            {status === 'in_progress' && (
-                <View style={styles.completionContainer}>
-                    <Text style={styles.completionTitle}>Complete Ticket</Text>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Remarks"
-                        value={remarks}
-                        onChangeText={setRemarks}
-                        multiline
-                    />
-
-                    <TouchableOpacity onPress={getCurrentLocation}>
-                        <Text>📍 Get Location</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => pickImage(setPictureCause)}>
-                        <Text>📷 Cause Photo</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={handleSubmitCompletion}>
-                        <Text style={{ color: 'blue' }}>Complete</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
+            {/* Render the captured picture if available */}
+            {renderPicture()}
+        </SafeAreaView>
     );
-};
-
-
-const styles = StyleSheet.create({
-    actionButtonsContainer: {
-        width: '100%',
-    },
-    pendingActions: {
-        width: '100%',
-        marginBottom: 10,
-    },
-    acceptedActions: {
-        width: '100%',
-        marginBottom: 10,
-    },
-
-    buttonRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 12,
-        width: '100%',
-    },
-    flexButton: {
-        flex: 1,
-        minHeight: 50,
-    },
-    completionContainer: {
-        width: '100%',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 16,
-
-    },
-    completionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#111827',
-        marginBottom: 4,
-    },
-    completionSubtitle: {
-        fontSize: 14,
-        color: '#6B7280',
-        marginBottom: 20,
-    },
-    formSection: {
-        marginBottom: 20,
-    },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#374151',
-        marginBottom: 8,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        backgroundColor: '#F9FAFB',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 15,
-        color: '#111827',
-    },
-    textArea: {
-        minHeight: 100,
-        textAlignVertical: 'top',
-    },
-    uploadButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderStyle: 'dashed',
-        borderRadius: 8,
-        padding: 16,
-        backgroundColor: '#F9FAFB',
-    },
-    uploadButtonText: {
-        fontSize: 15,
-        color: '#6B7280',
-        fontWeight: '500',
-    },
-    imagePreviewContainer: {
-        position: 'relative',
-    },
-    imagePreview: {
-        width: '100%',
-        height: 200,
-        borderRadius: 8,
-    },
-    removeImageButton: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 12,
-        padding: 4,
-    },
-    actionButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 12,
-        marginTop: 10,
-    },
-    backButton: {
-        flex: 1,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        alignItems: 'center',
-    },
-    backButtonText: {
-        fontSize: 15,
-        color: '#6B7280',
-        fontWeight: '600',
-    },
-    submitButton: {
-        flex: 2,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        backgroundColor: '#3B82F6',
-        alignItems: 'center',
-    },
-    submitButtonDisabled: {
-        backgroundColor: '#0044b9ff',
-    },
-    submitButtonText: {
-        fontSize: 15,
-        color: '#ffffffff',
-        fontWeight: '600',
-    },
-    inputWithIcon: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        backgroundColor: '#F9FAFB',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-    },
-
-    iconButton: {
-        marginLeft: 8,
-        padding: 4,
-
-    },
-
-});
-
-export default TicketActionButtons;
+}

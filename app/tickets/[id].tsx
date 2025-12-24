@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import TicketActionButtons from '../../components/TicketActionButtons';
 
 interface TicketItem {
@@ -17,6 +18,8 @@ interface TicketItem {
     type: string;
     date: string;
     subject: string;
+    latitude: string;
+    longitude: string;
 }
 
 export default function TicketDetails() {
@@ -32,6 +35,8 @@ export default function TicketDetails() {
         if (router.canGoBack()) router.back();
         else router.push('/(tech-tabs)/tickets');
     };
+
+    const mapUrl = `https://maps.google.com/maps?q=${ticket?.latitude},${ticket?.longitude}&z=18&output=embed`;
 
     const fetchTicketDetails = useCallback(async () => {
         if (!id) return;
@@ -50,10 +55,6 @@ export default function TicketDetails() {
             }
 
             const data = await response.json();
-
-
-            console.log(data);
-
             const t = data.ticket;
 
             setTicket({
@@ -67,8 +68,9 @@ export default function TicketDetails() {
                 type: t.type ? (t.type.toLowerCase() === 'repair' ? 'Repair' : 'Installation') : 'N/A',
                 date: t.created_at ?? new Date().toISOString(),
                 subject: t.subject ?? 'N/A',
+                latitude: t.subscription?.latitude,
+                longitude: t.subscription?.longitude,
             });
-
 
         } catch (error: any) {
             console.error('Fetch ticket error:', error.message);
@@ -84,15 +86,14 @@ export default function TicketDetails() {
     const formatDateTime = (isoDate: string) => {
         const date = new Date(isoDate);
         return date.toLocaleString('en-US', {
-            month: 'short',  
-            day: 'numeric', 
-            year: 'numeric', 
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
             hour: 'numeric',
             minute: '2-digit',
-            hour12: true,    
+            hour12: true,
         });
     };
-
 
     const cardMargin = 8;
     const screenPadding = 16;
@@ -152,7 +153,6 @@ export default function TicketDetails() {
                         <View style={[styles.card, { width: getCardWidth() }]}>
                             <Text style={styles.cardLabel}>DATE</Text>
                             <Text style={styles.cardValue}>{formatDateTime(ticket.date)}</Text>
-
                         </View>
                         <View style={[styles.card, { width: getCardWidth() }]}>
                             <Text style={styles.cardLabel}>TYPE</Text>
@@ -177,14 +177,22 @@ export default function TicketDetails() {
                     </View>
                 </View>
 
-                {/* Action Buttons */}
-                <View style={{ marginTop: 16, marginBottom: 16 }}>
-                    <TicketActionButtons ticketId={ticket.id} />
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Location on Map</Text>
+                    <WebView
+                        source={{ uri: 'https://staging.kazibufastnet.com/client/map/' + ticket.latitude + "/" + ticket.longitude }}
+                        style={styles.webview}
+                    />
                 </View>
+
+
+                {/* Action Buttons */}
+                <TicketActionButtons ticket={ticket} />
             </ScrollView>
         </SafeAreaView>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
@@ -198,6 +206,10 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
     },
+    webview: {
+        height: 300, 
+    },
+
     backButton: { padding: 5, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 18, fontWeight: '700', color: '#2D3748', textAlign: 'center', flex: 1 },
     scrollView: { flex: 1 },

@@ -1,3 +1,5 @@
+import { getToken } from '@/scripts/token';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Modal,
@@ -16,12 +18,49 @@ interface RejectedButtonProps {
 const RejectedButton: React.FC<RejectedButtonProps> = ({ onReject, style }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [comment, setComment] = useState('');
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  const handleReject = async (notes: string) => {
+    const url = `https://staging.kazibufastnet.com/api/tech/tickets/reject/${id}`;
+
+    try {
+      const token = await getToken();
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          notes: notes,
+        }),
+      });
+
+      // Check the response status
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('Rejection successful:', responseData);
+
+        // Redirect to tickets page after rejection
+        router.push('/(tech-tabs)/tickets');
+
+        setComment('');
+        setModalVisible(false);
+      } else {
+        const errorData = await response.json();
+        console.error('Error rejecting ticket:', errorData);
+        // Optionally show an error message to the user
+      }
+    } catch (error) {
+      console.error('Failed to send request:', error);
+      // Optionally show an error message to the user
+    }
+  };
 
   const handleSubmit = () => {
-    if (comment.trim() === '') return;
-    onReject(comment.trim());
-    setComment('');
-    setModalVisible(false);
+    if (!comment.trim()) return;
+    handleReject(comment.trim());
   };
 
   return (
@@ -105,13 +144,14 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     padding: 20,
   },
   modalContainer: {
     backgroundColor: '#fff',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#000',
     padding: 20,
   },
   modalTitle: {

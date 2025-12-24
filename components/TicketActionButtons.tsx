@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     Alert,
@@ -20,7 +20,7 @@ import TicketButton from './TicketButton';
 
 /* ---------------- TYPES ---------------- */
 
-type TicketStatus = 'pending' | 'accepted' | 'in_progress';
+type TicketStatus = 'pending' | 'accepted' | 'in_progress' | 'completed';
 
 interface TicketItem {
     id: string;
@@ -33,6 +33,8 @@ interface TicketItem {
     type: string;
     date: string;
     subject: string;
+    pictureCause: string;
+    pictureReading: string;
 }
 
 /* ---------------- COMPONENT ---------------- */
@@ -47,6 +49,21 @@ const TicketActionButtons: React.FC = () => {
     const [location, setLocation] = useState('');
     const [pictureCause, setPictureCause] = useState<string | null>(null);
     const [pictureReading, setPictureReading] = useState<string | null>(null);
+
+    const [isCompleted, setIsCompleted] = useState(false);  // To track completion status
+
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null); // State to store the selected image
+
+    const handleImageClick = (imageUrl: string) => {
+        setSelectedImage(imageUrl);
+        setIsModalVisible(true); // Show the modal
+    };
+
+    const handleCloseModal = () => {
+        setIsModalVisible(false); // Hide the modal
+        setSelectedImage(null); // Clear the selected image
+    };
 
     /* ---------------- FETCH TICKET ---------------- */
 
@@ -86,9 +103,24 @@ const TicketActionButtons: React.FC = () => {
                 type: t.type,
                 date: t.created_at,
                 subject: t.subject,
+                pictureCause: t.picture,
+                pictureReading: t.picture_reading,
             });
 
+            console.log(ticket?.pictureCause);
+
+
             setStatus(normalizedStatus);
+
+            // Check if the ticket is already completed
+            if (t.status === 'completed') {
+
+                setIsCompleted(true);
+                setRemarks(t.remarks || 'No remarks provided');
+                setPictureCause(t.picture || null);
+                setPictureReading(t.picture_reading || null);
+            }
+
         } catch (error) {
             console.error(error);
             Alert.alert('Error', 'Unable to load ticket');
@@ -198,13 +230,11 @@ const TicketActionButtons: React.FC = () => {
         Alert.alert('Removed', `${label} picture removed`);
     };
 
-    /* ---------------- SUBMIT COMPLETION ---------------- */
-
     const handleSubmitCompleted = async (
         remarks: string,
         location: string,
         pictureCause: string | null,
-        picturePending: string | null
+        pictureReading: string | null
     ) => {
         const url = `https://staging.kazibufastnet.com/api/tech/tickets/completed/${id}`;
 
@@ -231,7 +261,7 @@ const TicketActionButtons: React.FC = () => {
             };
 
             appendImage('picture_cause', pictureCause);
-            appendImage('picture_pending', picturePending); // <-- use pending, not reading
+            appendImage('picture_reading', pictureReading); // <-- use pending, not reading
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -244,9 +274,15 @@ const TicketActionButtons: React.FC = () => {
             });
 
             const data = await response.json();
+            console.log(data);
 
             if (data.status === 'success') {
-                Alert.alert('Success', 'Ticket completed successfully');
+                setIsCompleted(true);  // Mark the ticket as completed
+                setRemarks(remarks);   // Save the remarks after completion
+                setPictureCause(pictureCause);  // Save the image
+                setPictureReading(pictureReading);  // Save the image
+                Alert.alert('Success!', 'Ticket completed successfully');
+                router.push('/(tech-tabs)/tickets');
             } else {
                 console.warn('Submission failed:', data);
                 Alert.alert('Error', 'Submission failed. Check console for details.');
@@ -258,11 +294,9 @@ const TicketActionButtons: React.FC = () => {
     };
 
 
-    /* ---------------- UI ---------------- */
-
     return (
         <View style={styles.actionButtonsContainer}>
-            {status === 'pending' && (
+            {status === 'pending' && !isCompleted && (
                 <View style={styles.pendingContainer}>
                     <Text style={styles.sectionTitle}>Ticket Actions</Text>
                     <View style={styles.buttonRow}>
@@ -276,7 +310,7 @@ const TicketActionButtons: React.FC = () => {
                 </View>
             )}
 
-            {status === 'accepted' && (
+            {status === 'accepted' && !isCompleted && (
                 <View style={styles.acceptedContainer}>
                     <Text style={styles.sectionTitle}>Schedule Actions</Text>
                     <View style={styles.buttonRow}>
@@ -293,7 +327,7 @@ const TicketActionButtons: React.FC = () => {
                 </View>
             )}
 
-            {status === 'in_progress' && (
+            {status === 'in_progress' && !isCompleted && (
                 <View style={styles.completionContainer}>
                     <Text style={styles.completionTitle}>Complete Ticket</Text>
                     <Text style={styles.completionSubtitle}>
@@ -395,6 +429,47 @@ const TicketActionButtons: React.FC = () => {
                     </View>
                 </View>
             )}
+
+            {/* When ticket is completed */}
+            {isCompleted && (
+                <View style={styles.completedContainer}>
+                    <Text style={styles.sectionTitle}>Ticket Completed</Text>
+
+                    <View style={styles.completionDetails}>
+                        <Text style={styles.inputLabel}>Remarks</Text>
+                        <Text style={styles.remarksText}>{remarks || 'No remarks added'}</Text>
+                    </View>
+
+                    <View style={styles.formSection}>
+                        <Text style={styles.inputLabel}>Cause Picture</Text>
+                        {pictureCause ? (
+                            <Image source={{ uri: 'https://staging.kazibufastnet.com/storage/' + ticket?.pictureCause }} style={styles.imagePreview} />
+                        ) : (
+                            <Text>No picture attached</Text>
+                        )}
+                    </View>
+
+                    <View style={styles.formSection}>
+                        <Text style={styles.inputLabel}>Reading Picture</Text>
+                        {pictureReading ? (
+                            <Image source={{ uri: 'https://staging.kazibufastnet.com/storage/' + ticket?.pictureReading }} style={styles.imagePreview} />
+                        ) : (
+                            <Text>No picture attached</Text>
+                        )}
+                    </View>
+
+                    {!isCompleted && (
+                        <View style={styles.actionButtons}>
+                            <TouchableOpacity
+                                style={styles.submitButton}
+                                onPress={() => Alert.alert('Completed', 'This ticket is already marked as completed.')}
+                            >
+                                <Text style={styles.submitButtonText}>Ticket Completed</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </View>
+            )}
         </View>
     );
 };
@@ -471,6 +546,26 @@ const styles = StyleSheet.create({
     submitButton: { flex: 2, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#3B82F6', alignItems: 'center' },
     submitButtonDisabled: { backgroundColor: '#9CA3AF', opacity: 0.7 },
     submitButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+
+    completedContainer: {
+        backgroundColor: '#F7FAFC',
+        borderRadius: 10,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginTop: 16,
+    },
+    completionDetails: {
+        marginBottom: 16,
+    },
+
+    remarksText: {
+        fontSize: 14, // Sets the font size for the remarks text
+        color: '#2D3748', // A dark gray color for the text to make it easily readable
+        lineHeight: 20, // Ensures enough space between lines for readability
+        marginBottom: 16, // Adds space below the remarks text (creates distance from the next section)
+    },
+
 });
 
 export default TicketActionButtons;

@@ -11,8 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/Header';
 import { getToken } from '../../scripts/token';
+
 
 interface TicketItem {
   id: string;
@@ -115,97 +117,104 @@ const Ticket: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Header />
-      <View style={styles.contentContainer}>
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={true}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3498DB" />}
-        >
-          {/* Header */}
-          <View style={styles.titleSection}>
-            <Text style={styles.mainTitle}>Tickets</Text>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+      <View style={styles.container}>
+        <Header />
+        <View style={styles.contentContainer}>
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={true}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3498DB" />}
+          >
+            {/* Header */}
+            <View style={styles.titleSection}>
+              <Text style={styles.mainTitle}>Tickets</Text>
 
-            <View style={styles.searchWrapper}>
-              {!showSearch ? (
-                <TouchableOpacity style={styles.searchIconButton} onPress={() => setShowSearch(true)}>
-                  <Ionicons name="search-outline" size={22} color="#333" />
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.searchBar}>
-                  <Ionicons name="search-outline" size={18} color="#999" />
-                  <TextInput
-                    autoFocus
-                    value={search}
-                    onChangeText={(text) => setSearch(text)}
-                    placeholder="Search..."
-                    placeholderTextColor="#999"
-                    style={styles.searchInput}
-                    onBlur={() => setShowSearch(false)}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Loading */}
-          {loading && <ActivityIndicator size="large" color="#3498DB" style={{ marginTop: 20 }} />}
-
-          {/* Tickets */}
-          <View style={styles.ticketsContainer}>
-            {tickets
-              .filter(
-                (ticket) =>
-                  ticket.clientName.toLowerCase().includes(search.toLowerCase()) ||
-                  ticket.subject.toLowerCase().includes(search.toLowerCase()) ||
-                  ticket.id.toLowerCase().includes(search.toLowerCase())
-              )
-              .map((ticket, index) => {
-                const statusConfig = getStatusConfig(ticket.status);
-                return (
-                  <TouchableOpacity
-                    key={`${ticket.id}-${index}`} 
-                    style={styles.ticketCard}
-                    onPress={() => router.push(`/tickets/${ticket.id}`)}
-                  >
-                    <View style={styles.firstRow}>
-                      <View style={styles.clientInfo}>
-                        <Text style={styles.clientName} numberOfLines={1}>
-                          {ticket.clientName}
-                        </Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
-                        <Text style={[styles.statusText, { color: statusConfig.color }]}>{ticket.status}</Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.subjectText} numberOfLines={2}>
-                      {ticket.subject}
-                    </Text>
-
-                    <View style={styles.metaRow}>
-                      <Text style={styles.metaText}>
-                        {formatDate(ticket.date)} • {getTime(ticket.date)}
-                      </Text>
-                      {ticket.type && (
-                        <View style={styles.typeBadge}>
-                          <Text style={styles.typeText}>{ticket.type}</Text>
-                        </View>
-                      )}
-                    </View>
+              <View style={styles.searchWrapper}>
+                {!showSearch ? (
+                  <TouchableOpacity style={styles.searchIconButton} onPress={() => setShowSearch(true)}>
+                    <Ionicons name="search-outline" size={22} color="#333" />
                   </TouchableOpacity>
-                );
-              })}
-          </View>
-        </ScrollView>
+                ) : (
+                  <View style={styles.searchBar}>
+                    <Ionicons name="search-outline" size={18} color="#999" />
+                    <TextInput
+                      autoFocus
+                      value={search}
+                      onChangeText={(text) => setSearch(text)}
+                      placeholder="Search..."
+                      placeholderTextColor="#999"
+                      style={styles.searchInput}
+                      onBlur={() => setShowSearch(false)}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Loading */}
+            {loading && <ActivityIndicator size="large" color="#3498DB" style={{ marginTop: 20 }} />}
+
+            {/* Tickets */}
+            <View style={styles.ticketsContainer}>
+              {tickets
+                .filter(
+                  (ticket) =>
+                    ticket.clientName.toLowerCase().includes(search.toLowerCase()) ||
+                    ticket.subject.toLowerCase().includes(search.toLowerCase()) ||
+                    ticket.id.toLowerCase().includes(search.toLowerCase())
+                )
+                .map((ticket, index) => {
+                  const statusConfig = getStatusConfig(ticket.status);
+                  return (
+                    <TouchableOpacity
+                      key={`${ticket.id}-${index}`}
+                      style={styles.ticketCard}
+                      onPress={() => router.push(`/tickets/${ticket.id}`)}
+                    >
+                      <View style={styles.firstRow}>
+                        <View style={styles.clientInfo}>
+                          <Text style={styles.clientName} numberOfLines={1}>
+                            {ticket.clientName}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+                          <Text style={[styles.statusText, { color: statusConfig.color }]}>{ticket.status}</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.subjectText} numberOfLines={2}>
+                        {ticket.subject}
+                      </Text>
+
+                      <View style={styles.metaRow}>
+                        <Text style={styles.metaText}>
+                          {formatDate(ticket.date)} • {getTime(ticket.date)}
+                        </Text>
+                        {ticket.type && (
+                          <View style={styles.typeBadge}>
+                            <Text style={styles.typeText}>{ticket.type}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+          </ScrollView>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f7f7f7ff',
+    paddingTop: 30,
+  },
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   contentContainer: { flex: 1 },
   scrollView: { flex: 1 },

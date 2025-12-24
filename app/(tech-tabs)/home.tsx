@@ -3,13 +3,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dimensions,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../components/Header';
 import { getToken } from '../../scripts/token';
 import { getUser } from '../../scripts/user';
@@ -48,7 +48,7 @@ const Home: React.FC = () => {
   };
 
   const recentTickets = [
-    { id: 'KAZ-2021', client: 'John Doe', status: 'In Progress', time: '10:30 AM'},
+    { id: 'KAZ-2021', client: 'John Doe', status: 'In Progress', time: '10:30 AM' },
     { id: 'KAZ-2022', client: 'Sarah Smith', status: 'Assigned', time: '11:15 AM' },
     { id: 'KAZ-2023', client: 'Mike Johnson', status: 'Completed', time: '9:00 AM' },
     { id: 'KAZ-2024', client: 'Lisa Wang', status: 'Pending', time: '2:45 PM' },
@@ -127,41 +127,8 @@ const Home: React.FC = () => {
 
   const firstName = user?.name?.split(' ')[0] + '!' || 'Technician';
 
-  useEffect(() => {
-    const updateDateTime = () => {
-      const now = new Date();
-
-      setCurrentTime(
-        now.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      );
-
-      setCurrentDate(
-        now.toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      );
-    };
-
-    updateDateTime(); // run immediately
-
-    const interval = setInterval(updateDateTime, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-
-  
-
-
-
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <Header />
       <ScrollView
         style={styles.scrollView}
@@ -183,43 +150,19 @@ const Home: React.FC = () => {
               style={styles.greeting}
               numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
             >
-              {getGreeting()}
+              {getGreeting()} {firstName}
+
             </Text>
           </View>
 
           <View style={styles.welcomeLeft}>
             <Text
               style={styles.name}
-              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
             >
-            {firstName}
+              Technician
             </Text>
           </View>
-
-
-          <View style={styles.welcomeLeft}>
-            <Text
-              style={styles.currentTime}
-              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
-            >
-              {currentTime}
-            </Text>
-          </View>
-          <View style={styles.welcomeLeft}>
-            <Text
-              style={styles.currentDate}
-              numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
-            >
-               {currentDate}
-            </Text>
-          </View>
-
-        
-         
         </View>
-
-
-
         {/* Stats Section */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Today's Overview</Text>
@@ -290,7 +233,7 @@ const Home: React.FC = () => {
                   <View style={styles.ticketHeader}>
                     <View style={styles.ticketIdContainer}>
                       <Text style={styles.ticketId}>{ticket.id}</Text>
-                    
+
                     </View>
                     <Text style={styles.ticketTime}>{ticket.time}</Text>
                   </View>
@@ -321,7 +264,8 @@ const styles = StyleSheet.create({
   // Safe Area & Scroll
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f7f7f7ff',
+    paddingTop: 30,
   },
   scrollView: {
     flex: 1,
@@ -373,43 +317,14 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    fontSize: scaleSize(15),
+    fontSize: scaleSize(40),
     fontWeight: '700',
     color: '#1A202C',
   },
   name: {
-    fontSize: scaleSize(20),
-    fontWeight: '700',
-    color: '#1A202C',
-  },
-  currentTime: {
     fontSize: scaleSize(15),
-    fontWeight: '700',
-    color: '#1A202C',
-  },
-  currentDate: {
-    fontSize: scaleSize(9),
-    fontWeight: '700',
-    color: '#1A202C',
-  },
-
-  role: {
-    fontSize: scaleSize(14),
+    fontWeight: '500',
     color: '#718096',
-    marginTop: scaleSize(2),
-  },
-
-  time: {
-    fontSize: scaleSize(21),
-    fontWeight: '800',
-    color: '#00AFA1',
-    lineHeight: scaleSize(30),
-  },
-
-  date: {
-    fontSize: scaleSize(12),
-    color: '#718096',
-    marginTop: scaleSize(2),
   },
 
   // Stats Section
